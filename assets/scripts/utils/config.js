@@ -111,6 +111,7 @@ window.exportPhysicsTrace = function () {
 };
 if (urlParams.has('id')) {
   window.levelID = urlParams.get('id');
+  window.autoOpenLevel = urlParams.get('autoplay') === "1";
 }
 
 function hexToHexadecimal(str) {

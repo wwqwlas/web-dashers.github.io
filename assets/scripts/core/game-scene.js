@@ -1389,7 +1389,11 @@ this._menuFsBtn = this.add.image(33, 33, "GJ_WebSheet", _0x28fa5b ? "toggleFulls
 	 window._onlineSongArtist = songArtist;
 	 this.game.registry.set("autoStartGame", true);
  window._onlineReturnToPlayMenu = { lvl, backTarget: this._playMenuBackTarget };
- this._closePlayMenu(false, () => this.scene.restart());
+ if (this._playOverlay) {
+ 	this._closePlayMenu(false, () => this.scene.restart());
+ } else {
+ 	this.scene.restart();
+ }
  return true;
  }
 
@@ -1511,7 +1515,11 @@ this._menuFsBtn = this.add.image(33, 33, "GJ_WebSheet", _0x28fa5b ? "toggleFulls
 	 window._onlineSongArtist = songArtist;
 	 this.game.registry.set("autoStartGame", true);
  window._onlineReturnToPlayMenu = { lvl, backTarget: this._playMenuBackTarget };
- this._closePlayMenu(false, () => this.scene.restart());
+ if (this._playOverlay) {
+ 	this._closePlayMenu(false, () => this.scene.restart());
+ } else {
+ 	this.scene.restart();
+ }
  return true;
  } catch (err) {
  console.warn("Failed to start online level", err);
@@ -2757,7 +2765,7 @@ this._applyLockedGray(uploadedlvls
  }
  this._openOnlineLevelsScene(searchParams);
  };
- const _doSearchInner = async (levelId) => {
+ const _doSearchInner = async (levelId, autoPlay = false) => {
  const PROXY_BASE = (window._gdProxyUrl || "").replace(/\/$/, "");
  if (!PROXY_BASE) { console.warn("Level search: window._gdProxyUrl is not configured"); this._showServerErrorPopup(); return; }
  const formBody = `levelID=${levelId}&secret=Wmfd2893gb7`;
@@ -2769,6 +2777,7 @@ this._applyLockedGray(uploadedlvls
  if (!res.ok) throw new Error(`Proxy returned ${res.status}`);
  const rawResponse = await res.text();
  if (!rawResponse || rawResponse === "-1" || !rawResponse.includes(":")) {
+ if (autoPlay && typeof this._showAutoOpenError === "function") this._showAutoOpenError();
  return;
  }
 
@@ -2860,6 +2869,18 @@ this._applyLockedGray(uploadedlvls
  htmlInput.remove();
  window.removeEventListener("resize", _repositionInput);
  this._closeSearchMenu(true);
+ if (autoPlay) {
+ 	let started = false;
+ 	try {
+ 		started = await this._playSelectedOnlineLevel({ ...cellData, songOffset: levelData.offset || 0 });
+ 	} catch (autoErr) {
+ 		console.warn("Auto-open level failed", autoErr);
+ 	}
+ 	if (started) {
+ 		window.levelID = null;
+ 		return;
+ 	}
+ }
  this._openSearchResultScene(cellData);
  };
  this._searchOverlayObjects.push(overlay, blocker, backBtn);
@@ -2872,7 +2893,21 @@ this._applyLockedGray(uploadedlvls
  const loadingText = this.add.bitmapText(sw / 2, sh / 2, "bigFont", "Loading level...", 30)
  .setScrollFactor(0).setDepth(1001).setOrigin(0.5);
  this._searchOverlayObjects.push(loadingBg, loadingText);
- _doSearchInner(window.levelID);
+ const _autoPlay = window.autoOpenLevel === true;
+ this._showAutoOpenError = () => {
+ 	if (loadingText && loadingText.scene) loadingText.setText("Level not found");
+ 	const errZone = this.add.zone(0, 0, sw, sh).setOrigin(0).setScrollFactor(0).setDepth(1002).setInteractive();
+ 	this._searchOverlayObjects.push(errZone);
+ 	errZone.once("pointerup", () => this._closeSearchMenu());
+ };
+ (async () => {
+ 	try {
+ 		await _doSearchInner(window.levelID, _autoPlay);
+ 	} catch (autoErr) {
+ 		console.warn("Auto-open level failed", autoErr);
+ 		if (_autoPlay && typeof this._showAutoOpenError === "function") this._showAutoOpenError();
+ 	}
+ })();
  }
  this._searchHtmlInput = htmlInput;
  this._searchInputResizeFn = _repositionInput;
@@ -4409,7 +4444,7 @@ const startY = containerY + marginY + iconSize / 2;
  } else if (this._audio.isplaying() && !shouldPlayMenuMusic) {
  this._audio.stopMusic();
  }
- if (window.levelID) {
+ if (window.levelID && !this.game.registry.get("autoStartGame")) {
  this._openSearchMenu();
  }
  if (this.game.registry.get("autoStartGame")) {
